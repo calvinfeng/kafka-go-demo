@@ -4,6 +4,7 @@
 echo 'Starting Zookeeper'
 ./kafka/bin/zookeeper-server-start.sh kafka/config/zookeeper.properties &
 
+sleep 10
 # Start Broker 0
 echo 'Starting Broker 0'
 ./kafka/bin/kafka-server-start.sh kafka/config/server-0.properties &
