@@ -1,0 +1,5 @@
+*.idea
+*.log
+*.bat
+kafka/logs/**
+Kafkapo.iml
