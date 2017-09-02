@@ -49,7 +49,7 @@ func main() {
 		case ev := <-c.Events():
 			switch e := ev.(type) {
 			case kafka.AssignedPartitions:
-				fmt.Fprintf(os.Stderr, "%v\n", e)
+				fmt.Fprintf(os.Stderr, "%s\n", e)
 				c.Assign(e.Partitions)
 			case kafka.RevokedPartitions:
 				fmt.Fprintf(os.Stderr, "%v\n", e)
@@ -57,7 +57,8 @@ func main() {
 			case *kafka.Message:
 				fmt.Printf("Message on %s:\n%s\n", e.TopicPartition, string(e.Value))
 			case kafka.PartitionEOF:
-				fmt.Printf("Reached %v\n", e)
+				fmt.Print("Reached end of file, waiting for more messages...\n")
+				// fmt.Printf("Reached %v\n", e)
 			case kafka.Error:
 				fmt.Fprintf(os.Stderr, "Error: %v\n", e)
 				run = false
