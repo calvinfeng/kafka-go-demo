@@ -29,7 +29,10 @@ func main() {
 		"session.timeout.ms":              6000,
 		"go.events.channel.enable":        true,
 		"go.application.rebalance.enable": true,
-		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": "earliest"},
+		"enable.auto.commit":              false,
+		"default.topic.config": kafka.ConfigMap{
+			"auto.offset.reset": "earliest",
+		},
 	})
 
 	if err != nil {
@@ -41,6 +44,7 @@ func main() {
 	err = c.SubscribeTopics(topics, nil)
 	run := true
 
+	var isCommitted bool = false
 	for run == true {
 		select {
 		case sig := <-sigchan:
@@ -55,6 +59,16 @@ func main() {
 				fmt.Fprintf(os.Stderr, "%v\n", e)
 				c.Unassign()
 			case *kafka.Message:
+				if !isCommitted {
+					tp, err := c.Commit()
+					if err != nil {
+						fmt.Print("Something screwed up\n")
+					} else {
+						isCommitted = true
+						fmt.Printf("Committed TopicPartition: %v\n", tp)
+					}
+				}
+
 				fmt.Printf("Message on %s:\n%s\n", e.TopicPartition, string(e.Value))
 			case kafka.PartitionEOF:
 				fmt.Print("Reached end of file, waiting for more messages...\n")

@@ -66,6 +66,11 @@ Create an example topic
 kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic example
 ```
 
+We can list all the topics with this command
+```shell
+ kafka/bin/kafka-topics.sh --list --zookeeper localhost:2181
+ ```
+
 ### Send Messages
 Kafka comes with a command line client that will take inputs from command line inputs and send them out as messages to the Kafka clusters.
 ```shell
