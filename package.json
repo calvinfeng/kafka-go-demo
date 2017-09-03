@@ -1,0 +1,29 @@
+{
+  "name": "kafkapo",
+  "version": "0.0.1",
+  "description": "Using Kafkapo as the message broker",
+  "main": "index.js",
+  "scripts": {
+    "webpack": "webpack --config webpack.config.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/calvinfeng/Kafkapo.git"
+  },
+  "keywords": [
+    "Go",
+    "JavaScript",
+    "Kafka",
+    "Websocket"
+  ],
+  "author": "Calvin Feng",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/calvinfeng/Kafkapo/issues"
+  },
+  "homepage": "https://github.com/calvinfeng/Kafkapo#readme",
+  "devDependencies": {
+    "webpack": "^3.5.5"
+  }
+}
