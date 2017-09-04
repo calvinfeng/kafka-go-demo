@@ -1,13 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"os"
 )
 
-const topic = "gossip"
+var topic string = "gossip"
+
 const broker = "localhost:9092"
 const consumerGroup = "bitch"
 
@@ -69,21 +72,63 @@ func handleConnection(writer http.ResponseWriter, req *http.Request) {
 		log.Fatal(err)
 	}
 	consumers[ws] = c
+	go consumerListenForMessage(c, []string{topic})
 
 	// This will run as its own go-routine
 	clients[ws] = true
 	for {
 		var msg Message
-		// Read in new message as JSON and map it to a Message struct
 		err := ws.ReadJSON(&msg)
-		log.Println("Incoming message:", msg.Message)
+
 		if err != nil {
-			log.Printf("error: %v", err)
+			log.Printf("Websocket error: %v", err)
 			delete(clients, ws)
 			break
 		}
 
+		log.Println("Incoming message:", msg.Message)
+
+		// Start producing messages
+		err = p.Produce(
+			&kafka.Message{
+				TopicPartition: kafka.TopicPartition{
+					Topic:     &topic,
+					Partition: kafka.PartitionAny,
+				},
+				Value: []byte(msg.Message),
+			},
+			deliveryChan,
+		)
+
 		broadcast <- msg
+	}
+}
+
+func consumerListenForMessage(c *kafka.Consumer, topics []string) {
+	err := c.SubscribeTopics(topics, nil)
+	listening := true
+
+	if err != nil {
+		log.Fatal(err)
+		listening = false
+	}
+
+	for listening {
+		event := c.Poll(100)
+		if event == nil {
+			continue
+		}
+		switch e := event.(type) {
+		case *kafka.Message:
+			fmt.Printf("[Kafkapo][Message on %s]: %s\n", e.TopicPartition, string(e.Value))
+		case kafka.PartitionEOF:
+			fmt.Println("Reached EOF, pending for more messages")
+		case kafka.Error:
+			fmt.Fprintf(os.Stderr, "%% Error: %v\n", e)
+			listening = false
+		default:
+			fmt.Printf("Ignored %v\n", e)
+		}
 	}
 }
 
