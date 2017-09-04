@@ -25,5 +25,6 @@
   "homepage": "https://github.com/calvinfeng/Kafkapo#readme",
   "devDependencies": {
     "webpack": "^3.5.5"
-  }
+  },
+  "dependencies": {}
 }
