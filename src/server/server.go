@@ -72,7 +72,7 @@ func handleConnection(writer http.ResponseWriter, req *http.Request) {
 		log.Fatal(err)
 	}
 	consumers[ws] = c
-	go consumerListenForMessage(c, []string{topic})
+	go wsListenForMessages(ws, []string{topic})
 
 	// This will run as its own go-routine
 	clients[ws] = true
@@ -104,7 +104,8 @@ func handleConnection(writer http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func consumerListenForMessage(c *kafka.Consumer, topics []string) {
+func wsListenForMessages(ws *websocket.Conn, topics []string) {
+	c := consumers[ws]
 	err := c.SubscribeTopics(topics, nil)
 	listening := true
 
@@ -132,7 +133,7 @@ func consumerListenForMessage(c *kafka.Consumer, topics []string) {
 	}
 }
 
-func handleMessages() {
+func handleBroadcast() {
 	for {
 		msg := <-broadcast
 		for client := range clients {
@@ -151,7 +152,7 @@ func main() {
 	http.Handle("/", fs)
 	http.HandleFunc("/chat/streams", handleConnection)
 
-	go handleMessages()
+	go handleBroadcast()
 
 	log.Println("Starting server on port 8000")
 	err := http.ListenAndServe(":8000", nil)

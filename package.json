@@ -4,19 +4,15 @@
   "description": "Using Kafkapo as the message broker",
   "main": "index.js",
   "scripts": {
-    "webpack": "webpack --config webpack.config.js",
+    "build": "webpack --config webpack.config.js",
+    "build:watch": "webpack --config webpack.config.js --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/calvinfeng/Kafkapo.git"
   },
-  "keywords": [
-    "Go",
-    "JavaScript",
-    "Kafka",
-    "Websocket"
-  ],
+  "keywords": ["go", "javascript", "kafka", "websocket"],
   "author": "Calvin Feng",
   "license": "ISC",
   "bugs": {
@@ -24,7 +20,14 @@
   },
   "homepage": "https://github.com/calvinfeng/Kafkapo#readme",
   "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.2",
+    "babel-preset-es2017": "^6.24.1",
+    "babel-preset-react": "^6.24.1",
     "webpack": "^3.5.5"
   },
-  "dependencies": {}
+  "dependencies": {
+    "react": "^15.6.1",
+    "react-dom": "^15.6.1"
+  }
 }
