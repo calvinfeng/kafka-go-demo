@@ -52,12 +52,12 @@ by line here.
 ### Servers
 Starts Zookeeper
 ```shell
-kafka/bin/zookeeper-server-start.sh config/zookeeper.properties
+kafka/bin/zookeeper-server-start.sh kafka/config/zookeeper.properties
 ```
 
 Starts our first server-0
 ```shell
-kafka/bin/kafka-server-start.sh config/server-0.properties
+kafka/bin/kafka-server-start.sh kafka/config/server-0.properties
 ```
 
 ### Topics
