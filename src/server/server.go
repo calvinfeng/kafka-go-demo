@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/gorilla/websocket"
 	"log"
@@ -30,7 +31,11 @@ var broadcast = make(chan Message)
 var deliveryChan = make(chan kafka.Event)
 
 // Socket upgrader
-var upgrader = websocket.Upgrader{}
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 type Message struct {
 	Email    string `json:"email"`
@@ -39,16 +44,17 @@ type Message struct {
 }
 
 func handleConnection(writer http.ResponseWriter, req *http.Request) {
-	// Upgrade initial GET request to a websocket connection
-	ws, err := upgrader.Upgrade(writer, req, nil)
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	// Upgrade initial GET request to a web socket connection
+	wsConn, err := upgrader.Upgrade(writer, req, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Close this when client is disconnected
-	defer ws.Close()
+	defer wsConn.Close()
 
-	// Initialize a Kafka producer and consumer for this websocket stream
+	// Initialize a Kafka producer and consumer for this web socket stream
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers": broker,
 	})
@@ -56,7 +62,7 @@ func handleConnection(writer http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	producers[ws] = p
+	producers[wsConn] = p
 
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  broker,
@@ -71,22 +77,23 @@ func handleConnection(writer http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	consumers[ws] = c
-	go wsListenForMessages(ws, []string{topic})
+	consumers[wsConn] = c
+	go wsListenForMessages(wsConn, []string{topic})
 
 	// This will run as its own go-routine
-	clients[ws] = true
+	clients[wsConn] = true
 	for {
 		var msg Message
-		err := ws.ReadJSON(&msg)
+		_, messageBytes, err := wsConn.ReadMessage()
+		json.Unmarshal(messageBytes, &msg) // Unloading message bytes into the struct
 
 		if err != nil {
 			log.Printf("Websocket error: %v", err)
-			delete(clients, ws)
+			delete(clients, wsConn)
 			break
 		}
 
-		log.Println("Incoming message:", msg.Message)
+		log.Println("Message arrived from socket client:", msg.Message, "from", msg.Username)
 
 		// Start producing messages
 		err = p.Produce(
@@ -95,12 +102,12 @@ func handleConnection(writer http.ResponseWriter, req *http.Request) {
 					Topic:     &topic,
 					Partition: kafka.PartitionAny,
 				},
-				Value: []byte(msg.Message),
+				Value: []byte(messageBytes),
 			},
 			deliveryChan,
 		)
 
-		broadcast <- msg
+		// broadcast <- msg
 	}
 }
 
@@ -122,6 +129,16 @@ func wsListenForMessages(ws *websocket.Conn, topics []string) {
 		switch e := event.(type) {
 		case *kafka.Message:
 			fmt.Printf("[Kafkapo][Message on %s]: %s\n", e.TopicPartition, string(e.Value))
+			for client := range clients {
+				var msg Message
+				json.Unmarshal(e.Value, &msg) // Unloading message bytes into the struct
+				err := client.WriteJSON(msg)
+				if err != nil {
+					log.Printf("error: %v", err)
+					client.Close()
+					delete(clients, client)
+				}
+			}
 		case kafka.PartitionEOF:
 			fmt.Println("Reached EOF, pending for more messages")
 		case kafka.Error:
