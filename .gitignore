@@ -4,4 +4,3 @@
 kafka/logs/**
 Kafkapo.iml
 node_modules
-*.bundle.js

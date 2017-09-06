@@ -1,4 +1,4 @@
-# Kafkapo (Golang)
+# Kafkapo (Golang) - Realtime Message Application
 ## Setup for Ubuntu
 ### Installing default JRE/JDK
 First of all, we need Java to run Kafka.
@@ -71,10 +71,28 @@ We can list all the topics with this command
  kafka/bin/kafka-topics.sh --list --zookeeper localhost:2181
  ```
 
-### Send Messages
+### Produce Messages
 Kafka comes with a command line client that will take inputs from command line inputs and send them out as messages to the Kafka clusters.
 ```shell
 kafka/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic example
+```
+
+## Start the Golang server
+First of all, add this project into your `GOPATH`
+```
+export GOPATH=/path/to/Kafkapo
+```
+
+Include GOPATH in your path
+```
+export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+```
+
+And then install Gorilla websocket & Kafka Golang client
+```
+cd /path/to/Kafkapo
+go get github.com/gorilla/websocket
+go get github.com/confluentinc/confluent-kafka-go/kafka
 ```
 
 ## Few notes on Kafka
