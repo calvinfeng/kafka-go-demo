@@ -78,6 +78,7 @@ kafka/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic example
 ```
 
 ## Start the Golang server
+### Setup Go
 First of all, add this project into your `GOPATH` and include GOPATH in your path
 ```
 export GOPATH=/path/to/Kafkapo
@@ -90,5 +91,8 @@ cd /path/to/Kafkapo
 go get github.com/gorilla/websocket
 go get github.com/confluentinc/confluent-kafka-go/kafka
 ```
+### Setup NPM
+Then run `npm install` and `npm run build:watch` to compile JavaScript
 
+### Start Server
 And then `cd Kafkapo/src/server` and run `go install && server` to start the server

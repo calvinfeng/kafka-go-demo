@@ -41,6 +41,7 @@ type Message struct {
 	Email    string `json:"email"`
 	Username string `json:"username"`
 	Message  string `json:"message"`
+	Hash     string `json:"hash"`
 }
 
 func handleConnection(writer http.ResponseWriter, req *http.Request) {

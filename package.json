@@ -12,7 +12,12 @@
     "type": "git",
     "url": "git+https://github.com/calvinfeng/Kafkapo.git"
   },
-  "keywords": ["go", "javascript", "kafka", "websocket"],
+  "keywords": [
+    "go",
+    "javascript",
+    "kafka",
+    "websocket"
+  ],
   "author": "Calvin Feng",
   "license": "ISC",
   "bugs": {
@@ -27,6 +32,8 @@
     "webpack": "^3.5.5"
   },
   "dependencies": {
+    "object-hash": "^1.1.8",
+    "random-sentence": "^1.0.4",
     "react": "^15.6.1",
     "react-dom": "^15.6.1"
   }
