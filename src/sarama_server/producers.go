@@ -34,7 +34,7 @@ func createTlsConfiguration() (t *tls.Config) {
 	return t // will be nil by default if nothing is provided
 }
 
-func newDataListener(brokerList []string) sarama.Consumer {
+func newStreamConsumer(brokerList []string) sarama.Consumer {
 	config := sarama.NewConfig()
 	config.Consumer.Return.Errors = true
 
@@ -46,7 +46,7 @@ func newDataListener(brokerList []string) sarama.Consumer {
 	return consumer
 }
 
-func newDataCollector(brokerList []string) sarama.SyncProducer {
+func newStreamProducer(brokerList []string) sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll // Wait for all in-sync replicas to acknowledge the message
 	config.Producer.Retry.Max = 10                   // Retry up to 10 times to produce the message

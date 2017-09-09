@@ -24,12 +24,13 @@ var (
 )
 
 type Server struct {
-	DataCollector     sarama.SyncProducer
 	AccessLogProducer sarama.AsyncProducer
-	DataListener      sarama.Consumer
+	DataCollector     sarama.SyncProducer
 	Upgrader          websocket.Upgrader
-	Producers         map[*websocket.Conn]*sarama.SyncProducer
+	StreamConsumers   map[*websocket.Conn]sarama.Consumer
+	StreamProducers   map[*websocket.Conn]sarama.SyncProducer
 	Clients           map[*websocket.Conn]bool
+	BrokerList        []string
 }
 
 type Message struct {
@@ -79,7 +80,10 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 	defer wsConn.Close()
 
 	s.Clients[wsConn] = true
-	go s.clientConsumeMessages(wsConn, "chat")
+	s.StreamProducers[wsConn] = newStreamProducer(s.BrokerList)
+	s.StreamConsumers[wsConn] = newStreamConsumer(s.BrokerList)
+	go s.PublishToClient(wsConn, "chat")
+
 	for {
 		var msg Message
 		_, messageBytes, err := wsConn.ReadMessage()
@@ -92,7 +96,7 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 		}
 
 		log.Println("Message arrived from socket client:", msg.Message, "from", msg.Username)
-		partition, offset, err := s.DataCollector.SendMessage(&sarama.ProducerMessage{
+		partition, offset, err := s.StreamProducers[wsConn].SendMessage(&sarama.ProducerMessage{
 		Topic: "chat",
 			Value: sarama.ByteEncoder(messageBytes),
 		})
@@ -101,9 +105,9 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 	}
 }
 
-func (s *Server) clientConsumeMessages(ws *websocket.Conn, topic string) {
+func (s *Server) PublishToClient(ws *websocket.Conn, topic string) {
 	// pc stands for PartitionConsumer
-	pc, err := s.DataListener.ConsumePartition(topic, 0, sarama.OffsetOldest)
+	pc, err := s.StreamConsumers[ws].ConsumePartition(topic, 0, sarama.OffsetOldest)
 	if err != nil {
 		log.Printf("Failed to consume partition: %v", err)
 	}
@@ -115,7 +119,7 @@ func (s *Server) clientConsumeMessages(ws *websocket.Conn, topic string) {
 			log.Printf("Shit went wrong in consumer %v", err)
 			listening = false
 		case consumerMsg := <- pc.Messages():
-			fmt.Printf("[Kafkapo Consumer][%s][%s][%s]", consumerMsg.Topic, consumerMsg.Partition, consumerMsg.Offset)
+			fmt.Printf("[Kafkapo Consumer][%v][%v][%v]\n", consumerMsg.Topic, consumerMsg.Partition, consumerMsg.Offset)
 			for client := range s.Clients {
 				var msg Message
 				json.Unmarshal(consumerMsg.Value, &msg) // Unloading message bytes into the struct
@@ -180,11 +184,12 @@ func main() {
 	log.Printf("Kafka brokers: %s", strings.Join(brokerList, ", "))
 
 	server := &Server{
-		DataCollector:     newDataCollector(brokerList),
 		AccessLogProducer: newAccessLogProducer(brokerList),
-		DataListener:      newDataListener(brokerList),
-		Producers:         make(map[*websocket.Conn]*sarama.SyncProducer),
+		DataCollector: newStreamProducer(brokerList),
+		StreamConsumers:   make(map[*websocket.Conn]sarama.Consumer),
+		StreamProducers:   make(map[*websocket.Conn]sarama.SyncProducer),
 		Clients:           make(map[*websocket.Conn]bool),
+		BrokerList:        brokerList,
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
