@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/Shopify/sarama"
@@ -10,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"encoding/json"
 	"time"
 )
 
@@ -23,6 +23,11 @@ var (
 	caFile    = flag.String("ca", "", "The optional certificate authority file for TLS client authentication")
 	verifySsl = flag.Bool("verify", false, "Optional verify ssl certificates chain")
 )
+
+/*
+	AsyncProducer, SyncProducer, and Consumer are interfaces from sarama package. When we call NewAsyncProducer,
+	NewSyncProducer, and NewConsumer, the return values are actually a pointer to an internal struct.
+*/
 
 type Server struct {
 	AccessLogProducer sarama.AsyncProducer
@@ -39,6 +44,14 @@ type Message struct {
 	Username string `json:"username"`
 	Message  string `json:"message"`
 	Hash     string `json:"hash"`
+}
+
+func (s *Server) GetRouter() http.Handler {
+	r := mux.NewRouter()
+	r.HandleFunc("/chat/streams", s.handleStreamConnection)
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("../../static")))
+	// return s.withAccessLog(s.collectQueryStringData())
+	return r
 }
 
 func (s *Server) Run(port string) error {
@@ -63,14 +76,6 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) GetRouter() http.Handler {
-	r := mux.NewRouter()
-	r.HandleFunc("/chat/streams", s.handleStreamConnection)
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("../../static")))
-	// return s.withAccessLog(s.collectQueryStringData())
-	return r
-}
-
 func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Request) {
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
 	wsConn, err := s.Upgrader.Upgrade(writer, req, nil)
@@ -83,7 +88,9 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 	s.Clients[wsConn] = true
 	s.StreamProducers[wsConn] = newStreamProducer(s.BrokerList)
 	s.StreamConsumers[wsConn] = newStreamConsumer(s.BrokerList)
-	go s.PublishToClient(wsConn, "chat")
+
+	whenRoutineExit := make(chan bool)
+	go s.ConsumePartitionAndPublish(wsConn, "chat", whenRoutineExit) // Since we only have one partition, we will use 0 as default
 
 	for {
 		var msg Message
@@ -91,14 +98,18 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 		json.Unmarshal(messageBytes, &msg) // Unloading message bytes into the struct
 
 		if err != nil {
-			log.Printf("Websocket error: %v", err)
+			log.Printf("Websocket error: %v, now closing websocket connection...", err)
 			delete(s.Clients, wsConn)
+
+			<- whenRoutineExit // Wait for partition consumption to exit before we proceed to close Producer/Consumer
+
 			log.Print("Now closing StreamProducer...")
 			err := s.StreamProducers[wsConn].Close()
 			if err != nil {
 				log.Printf("Failed to close Producer cleanly: %v", err)
 			}
 
+			log.Print("Now closing StreamConsumer...")
 			err = s.StreamConsumers[wsConn].Close()
 			if err != nil {
 				log.Printf("Failed to close Consumer cleanly: %v", err)
@@ -108,7 +119,7 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 
 		log.Println("Message arrived from socket client:", msg.Message, "from", msg.Username)
 		partition, offset, err := s.StreamProducers[wsConn].SendMessage(&sarama.ProducerMessage{
-		Topic: "chat",
+			Topic: "chat",
 			Value: sarama.ByteEncoder(messageBytes),
 		})
 
@@ -116,9 +127,9 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 	}
 }
 
-func (s *Server) PublishToClient(ws *websocket.Conn, topic string) {
+func (s *Server) ConsumePartitionAndPublish(ws *websocket.Conn, topic string, exit chan bool) {
 	// pc stands for PartitionConsumer
-	pc, err := s.StreamConsumers[ws].ConsumePartition(topic, 0, 0)
+	pc, err := s.StreamConsumers[ws].ConsumePartition(topic, 0, sarama.OffsetOldest)
 	if err != nil {
 		log.Printf("Failed to consume partition: %v", err)
 	}
@@ -127,18 +138,15 @@ func (s *Server) PublishToClient(ws *websocket.Conn, topic string) {
 
 	for s.Clients[ws] {
 		select {
-		case err := <- pc.Errors():
-			log.Printf("Shit went wrong in consumer %v", err)
-		case consumerMsg := <- pc.Messages():
+		case err := <-pc.Errors():
+			log.Printf("[Kafkapo Consumer][error]: %v", err)
+		case consumerMsg := <-pc.Messages():
 			log.Printf("[Kafkapo Consumer][%v][%v][%v]\n", consumerMsg.Topic, consumerMsg.Partition, consumerMsg.Offset)
 			for client := range s.Clients {
 				var msg Message
 				json.Unmarshal(consumerMsg.Value, &msg) // Unloading message bytes into the struct
-				err := client.WriteJSON(msg)
-				if err != nil {
+				if err := client.WriteJSON(msg); err != nil {
 					log.Printf("error: %v", err)
-					client.Close()
-					delete(s.Clients, client)
 				}
 			}
 		default:
@@ -146,9 +154,34 @@ func (s *Server) PublishToClient(ws *websocket.Conn, topic string) {
 		}
 	}
 
-	log.Print("Now closing PartitionConsumer...")
+	log.Println("Now closing PartitionConsumer...")
+	exit <- true
 }
 
+func (s *Server) withAccessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+
+		next.ServeHTTP(w, r)
+
+		entry := &accessLogEntry{
+			Method:       r.Method,
+			Host:         r.Host,
+			Path:         r.RequestURI,
+			IP:           r.RemoteAddr,
+			ResponseTime: float64(time.Since(started)) / float64(time.Second),
+		}
+
+		// We will use the client's IP address as key. This will cause
+		// all the access log entries of the same IP address to end up
+		// on the same partition.
+		s.AccessLogProducer.Input() <- &sarama.ProducerMessage{
+			Topic: "access_log",
+			Key:   sarama.StringEncoder(r.RemoteAddr),
+			Value: entry,
+		}
+	})
+}
 func (s *Server) collectQueryStringData() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -172,17 +205,6 @@ func (s *Server) collectQueryStringData() http.Handler {
 	})
 }
 
-func (s *Server) withAccessLog(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// started := time.Now()
-
-		next.ServeHTTP(w, r)
-
-		// Implement this later
-		// entry := ...
-	})
-}
-
 func main() {
 	flag.Parse()
 
@@ -200,7 +222,7 @@ func main() {
 
 	server := &Server{
 		AccessLogProducer: newAccessLogProducer(brokerList),
-		DataCollector: newStreamProducer(brokerList),
+		DataCollector:     newStreamProducer(brokerList),
 		StreamConsumers:   make(map[*websocket.Conn]sarama.Consumer),
 		StreamProducers:   make(map[*websocket.Conn]sarama.SyncProducer),
 		Clients:           make(map[*websocket.Conn]bool),
