@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"encoding/json"
+	"time"
 )
 
 var (
@@ -92,6 +93,16 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 		if err != nil {
 			log.Printf("Websocket error: %v", err)
 			delete(s.Clients, wsConn)
+			log.Print("Now closing StreamProducer...")
+			err := s.StreamProducers[wsConn].Close()
+			if err != nil {
+				log.Printf("Failed to close Producer cleanly: %v", err)
+			}
+
+			err = s.StreamConsumers[wsConn].Close()
+			if err != nil {
+				log.Printf("Failed to close Consumer cleanly: %v", err)
+			}
 			break
 		}
 
@@ -107,19 +118,19 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 
 func (s *Server) PublishToClient(ws *websocket.Conn, topic string) {
 	// pc stands for PartitionConsumer
-	pc, err := s.StreamConsumers[ws].ConsumePartition(topic, 0, sarama.OffsetOldest)
+	pc, err := s.StreamConsumers[ws].ConsumePartition(topic, 0, 0)
 	if err != nil {
 		log.Printf("Failed to consume partition: %v", err)
 	}
 
-	listening := true
-	for listening{
+	defer pc.Close()
+
+	for s.Clients[ws] {
 		select {
 		case err := <- pc.Errors():
 			log.Printf("Shit went wrong in consumer %v", err)
-			listening = false
 		case consumerMsg := <- pc.Messages():
-			fmt.Printf("[Kafkapo Consumer][%v][%v][%v]\n", consumerMsg.Topic, consumerMsg.Partition, consumerMsg.Offset)
+			log.Printf("[Kafkapo Consumer][%v][%v][%v]\n", consumerMsg.Topic, consumerMsg.Partition, consumerMsg.Offset)
 			for client := range s.Clients {
 				var msg Message
 				json.Unmarshal(consumerMsg.Value, &msg) // Unloading message bytes into the struct
@@ -130,8 +141,12 @@ func (s *Server) PublishToClient(ws *websocket.Conn, topic string) {
 					delete(s.Clients, client)
 				}
 			}
+		default:
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
+
+	log.Print("Now closing PartitionConsumer...")
 }
 
 func (s *Server) collectQueryStringData() http.Handler {

@@ -89,12 +89,12 @@ class Kafkapo extends React.Component {
     }
 
     get historicalMessages() {
-        const messages = this.state.historicalMessages.map((msgData) => {
-            const msgId = msgData.hash ? msgData.hash : hash(msgData);
-            return <li key={msgId}><strong>{msgData.username}</strong> says "{msgData.message}"</li>;
-        });
-
-        return <ul>{messages}</ul>;
+        const listItems = [];
+        for (let i = 0; i < this.state.historicalMessages.length; i++) {
+            const msgData = this.state.historicalMessages[i];
+            listItems.push(<li key={i}><strong>{msgData.username}</strong> says "{msgData.message}"</li>);
+        }
+        return <ul>{listItems}</ul>;
     }
 
     get userInfoInputForm() {
