@@ -34,10 +34,22 @@ func createTlsConfiguration() (t *tls.Config) {
 	return t // will be nil by default if nothing is provided
 }
 
+func newDataListener(brokerList []string) sarama.Consumer {
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
+
+	consumer, err := sarama.NewConsumer(brokerList, config)
+	if err != nil {
+		log.Fatalln("Failed to start Sarama consumer:", err)
+	}
+
+	return consumer
+}
+
 func newDataCollector(brokerList []string) sarama.SyncProducer {
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll // Wait for all in-sync replicas to acknowledge the message
-	config.Producer.Retry.Max = 10                  // Retry up to 10 times to produce the message
+	config.Producer.Retry.Max = 10                   // Retry up to 10 times to produce the message
 	config.Producer.Return.Successes = true
 
 	tlsConfig := createTlsConfiguration()
@@ -56,7 +68,7 @@ func newDataCollector(brokerList []string) sarama.SyncProducer {
 
 func newAccessLogProducer(brokerList []string) sarama.AsyncProducer {
 	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForLocal        // Only wait for the leader to acknowledge
+	config.Producer.RequiredAcks = sarama.WaitForLocal       // Only wait for the leader to acknowledge
 	config.Producer.Compression = sarama.CompressionSnappy   // Compress messages
 	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
 

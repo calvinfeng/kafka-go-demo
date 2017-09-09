@@ -2,16 +2,19 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/Shopify/sarama"
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"os"
 	"strings"
-	"fmt"
+	"encoding/json"
 )
 
 var (
-	port      = flag.String("port", ":8080", "The address to bind to")
+	port      = flag.String("port", ":8000", "The address to bind to")
 	brokers   = flag.String("brokers", os.Getenv("KAFKA_PEERS"), "The Kafka brokers to connect to, as a comma separated list")
 	verbose   = flag.Bool("verbose", false, "Turn on Sarama logging")
 	certFile  = flag.String("certificate", "", "The optional certificate file for client authentication")
@@ -23,12 +26,23 @@ var (
 type Server struct {
 	DataCollector     sarama.SyncProducer
 	AccessLogProducer sarama.AsyncProducer
+	DataListener      sarama.Consumer
+	Upgrader          websocket.Upgrader
+	Producers         map[*websocket.Conn]*sarama.SyncProducer
+	Clients           map[*websocket.Conn]bool
+}
+
+type Message struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Message  string `json:"message"`
+	Hash     string `json:"hash"`
 }
 
 func (s *Server) Run(port string) error {
 	httpServer := &http.Server{
 		Addr:    port,
-		Handler: s.Handler(),
+		Handler: s.GetRouter(),
 	}
 
 	log.Printf("Listening for requests on %s...\n", port)
@@ -47,8 +61,73 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) Handler() http.Handler {
-	return s.withAccessLog(s.collectQueryStringData())
+func (s *Server) GetRouter() http.Handler {
+	r := mux.NewRouter()
+	r.HandleFunc("/chat/streams", s.handleStreamConnection)
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("../../static")))
+	// return s.withAccessLog(s.collectQueryStringData())
+	return r
+}
+
+func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Request) {
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	wsConn, err := s.Upgrader.Upgrade(writer, req, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer wsConn.Close()
+
+	s.Clients[wsConn] = true
+	go s.clientConsumeMessages(wsConn, "chat")
+	for {
+		var msg Message
+		_, messageBytes, err := wsConn.ReadMessage()
+		json.Unmarshal(messageBytes, &msg) // Unloading message bytes into the struct
+
+		if err != nil {
+			log.Printf("Websocket error: %v", err)
+			delete(s.Clients, wsConn)
+			break
+		}
+
+		log.Println("Message arrived from socket client:", msg.Message, "from", msg.Username)
+		partition, offset, err := s.DataCollector.SendMessage(&sarama.ProducerMessage{
+		Topic: "chat",
+			Value: sarama.ByteEncoder(messageBytes),
+		})
+
+		log.Printf("Message at produced at [%v][%v]", partition, offset)
+	}
+}
+
+func (s *Server) clientConsumeMessages(ws *websocket.Conn, topic string) {
+	// pc stands for PartitionConsumer
+	pc, err := s.DataListener.ConsumePartition(topic, 0, sarama.OffsetOldest)
+	if err != nil {
+		log.Printf("Failed to consume partition: %v", err)
+	}
+
+	listening := true
+	for listening{
+		select {
+		case err := <- pc.Errors():
+			log.Printf("Shit went wrong in consumer %v", err)
+			listening = false
+		case consumerMsg := <- pc.Messages():
+			fmt.Printf("[Kafkapo Consumer][%s][%s][%s]", consumerMsg.Topic, consumerMsg.Partition, consumerMsg.Offset)
+			for client := range s.Clients {
+				var msg Message
+				json.Unmarshal(consumerMsg.Value, &msg) // Unloading message bytes into the struct
+				err := client.WriteJSON(msg)
+				if err != nil {
+					log.Printf("error: %v", err)
+					client.Close()
+					delete(s.Clients, client)
+				}
+			}
+		}
+	}
 }
 
 func (s *Server) collectQueryStringData() http.Handler {
@@ -103,6 +182,14 @@ func main() {
 	server := &Server{
 		DataCollector:     newDataCollector(brokerList),
 		AccessLogProducer: newAccessLogProducer(brokerList),
+		DataListener:      newDataListener(brokerList),
+		Producers:         make(map[*websocket.Conn]*sarama.SyncProducer),
+		Clients:           make(map[*websocket.Conn]bool),
+		Upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
 	}
 
 	defer func() {
