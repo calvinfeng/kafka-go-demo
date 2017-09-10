@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"path/filepath"
 )
 
 var (
@@ -49,7 +50,14 @@ type Message struct {
 func (s *Server) GetRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/chat/streams", s.handleStreamConnection)
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("../../static")))
+
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+
+	exPath := filepath.Dir(ex)
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "../../static")))
 	// return s.withAccessLog(s.collectQueryStringData())
 	return r
 }
@@ -160,6 +168,7 @@ func (s *Server) ConsumePartitionAndPublish(ws *websocket.Conn, topic string, si
 	doneExit <- true
 }
 
+// Unused
 func (s *Server) withAccessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
@@ -184,6 +193,8 @@ func (s *Server) withAccessLog(next http.Handler) http.Handler {
 		}
 	})
 }
+
+// Unused
 func (s *Server) collectQueryStringData() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
