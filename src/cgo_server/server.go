@@ -7,12 +7,20 @@ import (
 	"path/filepath"
 )
 
+type Message struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Message  string `json:"message"`
+	Hash     string `json:"hash"`
+}
+
 type Server struct {
 	Upgrader        websocket.Upgrader
 	StreamConsumers map[*websocket.Conn]*kafka.Consumer
 	StreamProducers map[*websocket.Conn]*kafka.Producer
 	Clients         map[*websocket.Conn]bool
-	broadcast       chan []byte
+	Broadcast       chan []byte
+	Broker string
 }
 
 func (s *Server) GetRouter() http.Handler {
@@ -49,4 +57,25 @@ func (s *Server) handleStreamConnection(writer httpResponseWriter, req *http.Req
 	defer wsConn.Close()
 
   s.Clients[wsConn] = true
+
+	p, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": s.Broker})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	s.StreamProducers[wsConn] = p
+
+	for {
+		var msg Message
+		_, messageBytes, err := wsConn.ReadMessage()
+
+		if err != nil {
+			log.Printf("Websocket error: %v", err)
+			delete(clients, wsConn)
+			break
+		}
+
+		json.Unmarshal(messageBytes, &msg) // Unloading message bytes into the struct
+		log.Printf("Message arrived from socket client: %v from %v", msg.Message, msg.Username)
+	}
 }
