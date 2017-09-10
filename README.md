@@ -18,32 +18,7 @@ sudo apt-get install default-jre
 ```shell
 sudo apt-get install default-jdk
 ```
-That's all we need for Java!
-
-### Installing Golang Client
-Assuming that you have Golang installed on your system, the next thing we need is `librdkafka-dev` which is a C/C++ library for Kafka. We will install `librdkafka` through `apt` using Confluent's Debian repository.
-
-First install Confluent's public key
-```shell
-wget -qO - http://packages.confluent.io/deb/3.3/archive.key | sudo apt-key add -
-```
-
-Add the repository to your `etc/apt/sources.list`
-```shell
-sudo add-apt-repository "deb [arch=amd64] http://packages.confluent.io/deb/3.3 stable main"
-```
-
-Run `apt-get install`
-```shell
-sudo apt-get install librdkafka-dev
-```
-
-Then finally, we can do a `go get`
-```shell
-go get -u github.com/confluentinc/confluent-kafka-go/kafka
-```
-
-The Golang client will show up in your `$GOPATH/src/github.com/`
+That's all we need for Java to start Kafka!
 
 ## How-to Kafka
 The shell script `start_kafka.sh` has the required commands to start the Kafka server. We wiill go through them line
@@ -85,14 +60,61 @@ export GOPATH=/path/to/Kafkapo
 export PATH=$PATH:$GOPATH/bin
 ```
 
-And then install Gorilla websocket & Kafka Golang client
+### Installing Golang Client
+There are two choices of Golang Client
+
+* `confluentinc/confluent-kafka-go/kafka`
+* `Shopify/sarama`
+
+#### Confluent Go
+We are going to do the set up for Confluent's Kafka Golang client first. Assuming that you have Golang installed on your system, we need to install `librdkafka-dev` which is a C/C++ library for Confluent Golang client to interact with Kafka. We will install `librdkafka` through `apt` using Confluent's Debian repository.
+
+First install Confluent's public key
+```shell
+wget -qO - http://packages.confluent.io/deb/3.3/archive.key | sudo apt-key add -
+```
+
+Add the repository to your `etc/apt/sources.list`
+```shell
+sudo add-apt-repository "deb [arch=amd64] http://packages.confluent.io/deb/3.3 stable main"
+```
+
+And then run and an update
+```shell
+sudo apt-get update
+```
+
+Run `apt-get install`
+```shell
+sudo apt-get install librdkafka-dev
+```
+
+Then finally, we can do a `go get`
+```shell
+go get -u github.com/confluentinc/confluent-kafka-go/kafka
+```
+
+The Golang client will show up in your `$GOPATH/src/github.com/`
+
+#### Sarama Go
+This one is much easier, simply do a `go get`
+```shell
+go get github.com/Shopify/sarama
+```
+
+### Installing Gorilla dependencies
+Also install gorilla, we need it for websocket and routing.
 ```
 cd /path/to/Kafkapo
 go get github.com/gorilla/websocket
-go get github.com/confluentinc/confluent-kafka-go/kafka
+go get github.com/gorilla/mux
 ```
+
 ### Setup NPM
 Then run `npm install` and `npm run build:watch` to compile JavaScript
 
 ### Start Server
-And then `cd Kafkapo/src/server` and run `go install && server` to start the server
+And then `cd Kafkapo/src` and
+
+* run `go install cgo_server && cgo_server` to start the Confluent Go server
+* run `go install sarama_server && sarama_server` to start the Shopify Sarama server
