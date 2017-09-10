@@ -1,4 +1,21 @@
+// Example channel-based high-level Apache Kafka consumer
 package main
+
+/**
+ * Copyright 2016 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import (
 	"fmt"
@@ -9,8 +26,10 @@ import (
 )
 
 func main() {
+
 	if len(os.Args) < 4 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <broker> <group> <topics>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s <broker> <group> <topics..>\n",
+			os.Args[0])
 		os.Exit(1)
 	}
 
@@ -21,19 +40,13 @@ func main() {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Consumers are grouped by group.id. This property identify you as a consumer group, so the broker knows which was
-	// the last record you have consumed by offset, by partition.
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":               broker,
 		"group.id":                        group,
 		"session.timeout.ms":              6000,
 		"go.events.channel.enable":        true,
 		"go.application.rebalance.enable": true,
-		"enable.auto.commit":              false,
-		"default.topic.config": kafka.ConfigMap{
-			"auto.offset.reset": "earliest",
-		},
-	})
+		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": "earliest"}})
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create consumer: %s\n", err)
@@ -41,40 +54,32 @@ func main() {
 	}
 
 	fmt.Printf("Created Consumer %v\n", c)
+
 	err = c.SubscribeTopics(topics, nil)
+
 	run := true
 
-	var isCommitted bool = false
 	for run == true {
 		select {
 		case sig := <-sigchan:
 			fmt.Printf("Caught signal %v: terminating\n", sig)
 			run = false
+
 		case ev := <-c.Events():
 			switch e := ev.(type) {
 			case kafka.AssignedPartitions:
-				fmt.Fprintf(os.Stderr, "%s\n", e)
+				fmt.Fprintf(os.Stderr, "%% %v\n", e)
 				c.Assign(e.Partitions)
 			case kafka.RevokedPartitions:
-				fmt.Fprintf(os.Stderr, "%v\n", e)
+				fmt.Fprintf(os.Stderr, "%% %v\n", e)
 				c.Unassign()
 			case *kafka.Message:
-				if !isCommitted {
-					tp, err := c.Commit()
-					if err != nil {
-						fmt.Print("Something screwed up\n")
-					} else {
-						isCommitted = true
-						fmt.Printf("Committed TopicPartition: %v\n", tp)
-					}
-				}
-
-				fmt.Printf("Message on %s:\n%s\n", e.TopicPartition, string(e.Value))
+				fmt.Printf("%% Message on %s:\n%s\n",
+					e.TopicPartition, string(e.Value))
 			case kafka.PartitionEOF:
-				fmt.Print("Reached end of file, waiting for more messages...\n")
-				// fmt.Printf("Reached %v\n", e)
+				fmt.Printf("%% Reached %v\n", e)
 			case kafka.Error:
-				fmt.Fprintf(os.Stderr, "Error: %v\n", e)
+				fmt.Fprintf(os.Stderr, "%% Error: %v\n", e)
 				run = false
 			}
 		}
