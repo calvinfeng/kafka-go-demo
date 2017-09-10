@@ -102,7 +102,7 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 			delete(s.Clients, wsConn)
 
 			signalRoutineExit <- true
-			<- whenRoutineExit // Wait for partition consumption to exit before we proceed to close Producer/Consumer
+			<-whenRoutineExit // Wait for partition consumption to exit before we proceed to close Producer/Consumer
 
 			log.Print("Now closing StreamProducer...")
 			err := s.StreamProducers[wsConn].Close()
