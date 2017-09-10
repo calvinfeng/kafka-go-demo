@@ -89,18 +89,19 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 	s.StreamProducers[wsConn] = newStreamProducer(s.BrokerList)
 	s.StreamConsumers[wsConn] = newStreamConsumer(s.BrokerList)
 
+	signalRoutineExit := make(chan bool)
 	whenRoutineExit := make(chan bool)
-	go s.ConsumePartitionAndPublish(wsConn, "chat", whenRoutineExit) // Since we only have one partition, we will use 0 as default
+	go s.ConsumePartitionAndPublish(wsConn, "chat", signalRoutineExit, whenRoutineExit) // Since we only have one partition, we will use 0 as default
 
 	for {
 		var msg Message
 		_, messageBytes, err := wsConn.ReadMessage()
-		json.Unmarshal(messageBytes, &msg) // Unloading message bytes into the struct
 
 		if err != nil {
 			log.Printf("Websocket error: %v, now closing websocket connection...", err)
 			delete(s.Clients, wsConn)
 
+			signalRoutineExit <- true
 			<- whenRoutineExit // Wait for partition consumption to exit before we proceed to close Producer/Consumer
 
 			log.Print("Now closing StreamProducer...")
@@ -117,26 +118,26 @@ func (s *Server) handleStreamConnection(writer http.ResponseWriter, req *http.Re
 			break
 		}
 
+		json.Unmarshal(messageBytes, &msg) // Unloading message bytes into the struct
+
 		log.Println("Message arrived from socket client:", msg.Message, "from", msg.Username)
 		partition, offset, err := s.StreamProducers[wsConn].SendMessage(&sarama.ProducerMessage{
 			Topic: "chat",
 			Value: sarama.ByteEncoder(messageBytes),
 		})
-
 		log.Printf("Message at produced at [%v][%v]", partition, offset)
 	}
 }
 
-func (s *Server) ConsumePartitionAndPublish(ws *websocket.Conn, topic string, exit chan bool) {
+func (s *Server) ConsumePartitionAndPublish(ws *websocket.Conn, topic string, signalExit chan bool, doneExit chan bool) {
 	// pc stands for PartitionConsumer
 	pc, err := s.StreamConsumers[ws].ConsumePartition(topic, 0, sarama.OffsetOldest)
 	if err != nil {
 		log.Printf("Failed to consume partition: %v", err)
 	}
 
-	defer pc.Close()
-
-	for s.Clients[ws] {
+	listening := true
+	for listening {
 		select {
 		case err := <-pc.Errors():
 			log.Printf("[Kafkapo Consumer][error]: %v", err)
@@ -149,13 +150,14 @@ func (s *Server) ConsumePartitionAndPublish(ws *websocket.Conn, topic string, ex
 					log.Printf("error: %v", err)
 				}
 			}
-		default:
-			time.Sleep(500 * time.Millisecond)
+		case <-signalExit:
+			listening = false
 		}
 	}
 
-	log.Println("Now closing PartitionConsumer...")
-	exit <- true
+	pc.Close()
+	log.Println("PartitionConsumer has closed.")
+	doneExit <- true
 }
 
 func (s *Server) withAccessLog(next http.Handler) http.Handler {
