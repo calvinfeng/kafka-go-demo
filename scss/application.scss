@@ -1,7 +1,7 @@
-body {
-  font-size: 4em;
+$font-stack: Helvetica, sans-serif;
+$primary-color: #333;
 
-  .index {
-    font-size: 2em;
-  }
+body {
+  font: 100% $font-stack;
+  color: $primary-color;
 }

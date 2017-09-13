@@ -10,7 +10,7 @@ const HtmlWebpackPluginConfig = new HtmlWebpackPlugin({
 });
 */
 
-const extractSCSS = new ExtractTextPlugin('index.bundle.css', { allChunks: true });
+const extractSCSS = new ExtractTextPlugin('index.bundle.css');
 
 module.exports = {
     entry: __dirname + '/ui/index.jsx',
@@ -28,6 +28,21 @@ module.exports = {
         { test: /\.scss$/, loaders: ['style-loader', 'css-loader', 'sass-loader'], exclude: /node_modules/}
         // { test: /\.sass$/, loader: ExtractTextPlugin.extract("style-loader", "css-loader!sass-loader"), exclude: /node_modules/ }
         /* using ExtractTextPlugin.extract(["css","sass"]) works too */
+      ],
+      rules: [
+        {
+          test: /\.jsx$/,
+          exclude: /(node_modules|bower_components)/,
+          use: { loader: 'babel-loader' }
+        },
+        {
+          test: /\.scss$/,
+          use: ExtractTextPlugin.extract({
+            fallback: 'style-loader',
+            //resolve-url-loader may be chained before sass-loader if necessary
+            use: ['css-loader', 'sass-loader']
+          })
+        }
       ]
     },
     plugins: [extractSCSS],
@@ -37,11 +52,7 @@ module.exports = {
 
 /*
 rules: [
-  {
-    test: /\.jsx$/,
-    exclude: /(node_modules|bower_components)/,
-    use: { loader: 'babel-loader' }
-  },
+
   {
     test: /\.scss$/,
     use: ExtractTextPlugin.extract({
