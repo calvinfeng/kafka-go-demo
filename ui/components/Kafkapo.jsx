@@ -2,6 +2,7 @@ import React from 'react';
 import hash from 'object-hash';
 import randomSentence from 'random-sentence';
 
+import '../../scss/application.scss';
 
 class Kafkapo extends React.Component {
     constructor(props) {
