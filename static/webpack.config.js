@@ -1,21 +1,20 @@
 const path = require('path');
 const ExtractTextPlugin = require('extract-text-webpack-plugin');
+// const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 /*
-const HtmlWebpackPlugin = require('html-webpack-plugin');
 const HtmlWebpackPluginConfig = new HtmlWebpackPlugin({
   title: 'Kafkapo',
   filename: 'index.html',
   inject: 'body',
 });
 */
-
 const extractSCSS = new ExtractTextPlugin('index.bundle.css');
 
 module.exports = {
-    entry: __dirname + '/ui/index.jsx',
+    entry: __dirname + '/static/scripts/index.jsx',
     output: {
-         path: __dirname + '/static',
+         path: __dirname,
          filename: 'index.bundle.js'
     },
     resolve: {
@@ -38,17 +37,15 @@ module.exports = {
         {
           test: /\.scss$/,
           use: ExtractTextPlugin.extract({
-            fallback: 'style-loader',
-            //resolve-url-loader may be chained before sass-loader if necessary
+            fallback: 'style-loader', // resolve-url-loader may be chained before sass-loader if necessary
             use: ['css-loader', 'sass-loader']
           })
         }
       ]
     },
-    plugins: [extractSCSS],
-    devtool: 'source-maps'
+    devtool: 'source-maps',
+    plugins: [extractSCSS]
 };
-
 
 /*
 rules: [
