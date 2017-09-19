@@ -1,24 +1,21 @@
 import React from 'react';
 import hash from 'object-hash';
 import randomSentence from 'random-sentence';
+import AppBar from 'material-ui/AppBar';
+import TextField from 'material-ui/TextField';
+import RaisedButton from 'material-ui/RaisedButton';
+import Paper from 'material-ui/Paper';
+import Divider from 'material-ui/Divider';
 
-import '../../styles/application.scss';
 
 class Kafkapo extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = {
-            hasUserInfo: false,
-            isConnected: false,
-            historicalMessages: [],
-            username: "",
-            email: "",
-            message: ""
-        };
-        this.handleMsgChange = this.handleMsgChange.bind(this);
-        this.handleSend = this.handleSend.bind(this);
-        this.handleUserInfoSubmit = this.handleUserInfoSubmit.bind(this);
-        this.handleUserInfoChange = this.handleUserInfoChange.bind(this);
+    state = {
+        hasUserInfo: false,
+        isConnected: false,
+        historicalMessages: [],
+        username: "",
+        email: "",
+        message: ""
     }
 
     componentDidMount() {
@@ -36,30 +33,32 @@ class Kafkapo extends React.Component {
         };
     }
 
-    handleMsgChange(e) {
+    handleMsgChange = (e) => {
         e.preventDefault();
         this.setState({ message: e.target.value });
     }
 
-    handleUserInfoChange(e) {
-        e.preventDefault();
-        switch(e.target.id) {
+    handleUserInfoChange = (field) => {
+        switch(field) {
             case 'username':
-                this.setState({ username: e.target.value });
-                break;
+                return (e) => {
+                    e.preventDefault();
+                    this.setState({ username: e.target.value });
+                };
             case 'email':
-                this.setState({ email: e.target.value });
-                break;
+                return (e) => {
+                    e.preventDefault();
+                    this.setState({ email: e.target.value });
+                };
             default:
-                console.log("username and email html elements do not exist");
+                console.warn("Unknown field:", field);
         }
     }
 
-    handleSend(e) {
+    handleSend = (e) => {
         if (e) {
             e.preventDefault();
         }
-
         const payload = {
             email: this.state.email,
             username: this.state.username,
@@ -71,7 +70,7 @@ class Kafkapo extends React.Component {
         this.setState({message: ""});
     }
 
-    handleUserInfoSubmit(e) {
+    handleUserInfoSubmit = (e) => {
         e.preventDefault();
         if (this.state.username.length > 0 && this.state.email.length > 0) {
             this.setState({ hasUserInfo: true });
@@ -85,8 +84,19 @@ class Kafkapo extends React.Component {
 
     get connectionState() {
         if (this.state.isConnected) {
-            return <div>Stream is connected</div>;
+            return (
+                <div>
+                    <h2>Socket Connection</h2>
+                    <p>Stream is connected</p>
+                </div>
+            );
         }
+        return (
+            <div>
+                <h2>Socket Connection</h2>
+                <p>Attempting to connect</p>
+            </div>
+        );
     }
 
     get historicalMessages() {
@@ -109,13 +119,19 @@ class Kafkapo extends React.Component {
         }
         return (
             <form onSubmit={this.handleUserInfoSubmit}>
-                <label>
-                    Username: <input type="text" id="username" value={this.state.username} onChange={this.handleUserInfoChange} />
-                </label>
-                <label>
-                    Email: <input type="text" id="email" value={this.state.email} onChange={this.handleUserInfoChange} />
-                </label>
-                <input type="submit" value="Submit" />
+                <TextField
+                    hintText="Any name will do"
+                    floatingLabelText="Username"
+                    value={this.state.username}
+                    onChange={this.handleUserInfoChange('username')} />
+                <br />
+                <TextField
+                    hintText="Any email will do"
+                    floatingLabelText="Email"
+                    value={this.state.email}
+                    onChange={this.handleUserInfoChange('email')} />
+                <br />
+                <RaisedButton type="submit" label="Submit" />
             </form>
         )
     }
@@ -124,24 +140,33 @@ class Kafkapo extends React.Component {
         if (this.state.hasUserInfo) {
             return (
                 <form onSubmit={this.handleSend}>
-                    <label>Message: <input type="text" id="message" value={this.state.message} onChange={this.handleMsgChange} /></label>
-                    <input type="submit" value="Send" />
+                    <TextField
+                        hintText="Send a message to Kafka cluster"
+                        floatingLabelText="Message"
+                        value={this.state.message}
+                        onChange={this.handleMsgChange}
+                        fullWidth={true} />
+                    <RaisedButton type="submit" label="Send" />
                 </form>
             )
         }
-        return <div>Please enter your username and email</div>;
+        return <p>Please enter your username and email</p>;
     }
 
     render() {
         return (
             <div>
-                <h1>Hello World</h1>
+                <AppBar title="Kafkapo" />
                 {this.userInfoInputForm}
-                {this.connectionState}
-                <h2>Messages</h2>
-                {this.historicalMessages}
-                <h2>Form</h2>
-                {this.messageInputForm}
+                <Paper zDepth={1}>
+                    {this.connectionState}
+                    <Divider />
+                    <h2>Messages</h2>
+                    {this.historicalMessages}
+                    <Divider />
+                    <h2>Form</h2>
+                    {this.messageInputForm}
+                </Paper>
             </div>
         );
     }
