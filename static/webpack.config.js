@@ -12,7 +12,7 @@ const HtmlWebpackPluginConfig = new HtmlWebpackPlugin({
 const extractSCSS = new ExtractTextPlugin('index.bundle.css');
 
 module.exports = {
-    entry: __dirname + '/static/scripts/index.jsx',
+    entry: __dirname + '/scripts/index.jsx',
     output: {
          path: __dirname,
          filename: 'index.bundle.js'

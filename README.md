@@ -1,5 +1,27 @@
 # Kafkapo (Golang) - Realtime Message Application
-## Setup for Ubuntu
+## Quick start
+If you have everything installed already, just run the following commands
+
+```
+./kafka/bin/zookeeper-server-start.sh kafka/config/zookeeper.properties
+```
+
+Open another tab
+```
+./kafka/bin/kafka-server-start.sh kafka/config/server-0.properties
+```
+
+Another tab
+```
+./kafka/bin/kafka-server-start.sh kafka/config/server-1.properties
+```
+
+Another tab again
+```
+./kafka/bin/kafka-server-start.sh kafka/config/server-2.properties
+```
+
+## Setup for Ubuntu users
 ### Installing default JRE/JDK
 First of all, we need Java to run Kafka.
 ```shell
