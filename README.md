@@ -43,8 +43,7 @@ sudo apt-get install default-jdk
 That's all we need for Java to start Kafka!
 
 ## How-to Kafka
-The shell script `start_kafka.sh` has the required commands to start the Kafka server. We wiill go through them line
-by line here.
+As described in the **Quick start** section, we will walk through the lines in details.
 
 ### Servers
 Starts Zookeeper
@@ -58,20 +57,43 @@ kafka/bin/kafka-server-start.sh kafka/config/server-0.properties
 ```
 
 ### Topics
-Create an example topic
+#### Create
+Create a topic named `chat` with replication factor of 1 and on partition 1
 ```shell
-kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic example
+kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic chat
 ```
 
+#### List
 We can list all the topics with this command
-```shell
+```
  kafka/bin/kafka-topics.sh --list --zookeeper localhost:2181
  ```
 
-### Produce Messages
+#### Describe
+We can look at a topic in detail using `describe`
+```
+./kafka/bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic chat
+```
+
+#### Delete
+We can delete the topic `chat` with this command
+```
+./kafka/bin/kafka-topics.sh --delete --zookeeper localhost:2181 --topic chat
+```
+
+### CLI Producer
 Kafka comes with a command line client that will take inputs from command line inputs and send them out as messages to the Kafka clusters.
-```shell
-kafka/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic example
+```
+./kafka/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic chat
+<Enter your messages>
+<Enter again>
+<again...>
+```
+
+### CLI Consumer
+Similarly we can start another CLI on another tab to listen to the messages produced on a particular topic.
+```
+./kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic chat --from-beginning
 ```
 
 ## Start the Golang server
