@@ -162,3 +162,6 @@ And then `cd Kafkapo/src` and
 
 * run `go install cgo_server && cgo_server` to start the Confluent Go server
 * run `go install sarama_server && sarama_server` to start the Shopify Sarama server
+
+## To-do Features
+I need to use `godep`
