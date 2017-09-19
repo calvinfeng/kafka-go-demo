@@ -6,6 +6,7 @@ import TextField from 'material-ui/TextField';
 import RaisedButton from 'material-ui/RaisedButton';
 import Paper from 'material-ui/Paper';
 import Divider from 'material-ui/Divider';
+import LinearProgress from 'material-ui/LinearProgress';
 
 
 class Kafkapo extends React.Component {
@@ -86,15 +87,15 @@ class Kafkapo extends React.Component {
         if (this.state.isConnected) {
             return (
                 <div>
-                    <h2>Socket Connection</h2>
-                    <p>Stream is connected</p>
+                    <h2>Connected</h2>
+                    <LinearProgress mode="determinate" value={100} />
                 </div>
             );
         }
         return (
             <div>
-                <h2>Socket Connection</h2>
-                <p>Attempting to connect</p>
+                <h2>Connecting</h2>
+                <LinearProgress />
             </div>
         );
     }
